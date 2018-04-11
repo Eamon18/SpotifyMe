@@ -1,0 +1,160 @@
+import spotipy
+import spotipy.util as util
+import random
+from random import shuffle
+#from ConfigParser import SafeConfigParser
+
+class User():
+	def __init__(self):
+		#parser = SafeConfigParser() #Reads config.ini file for API keys
+		#parser.read("config.ini")
+		self.CLIENT_ID = '7e7adeea0cb14c149c605989a61259a7'
+		self.CLIENT_SECRET = '98e1ab5c21774f64babdd62383d98e98'
+		self.REDIRECT_URI = 'http://localhost:8888/callback'
+		self.SCOPE = "playlist-read-private playlist-modify-private playlist-read-collaborative playlist-modify-public" #Allows program to access/edit private and public playlists
+		self.sp = self.getUser() #Creates Spotify Instance
+		self.id = self.sp.me()['id'] #Gets ID of authenticating user
+
+	def getUser(self):
+		"""Creates Spotify instance for Authenticating User"""
+		token = self.getUserToken()
+		sp = spotipy.Spotify(auth=token)
+		sp.trace = False
+		return sp
+
+	def getFeatures(self, track):
+		"""Retrieves Audio features from Spotify API for a single track"""
+		features = self.sp.audio_features(track)
+		return features
+
+	def getPlaylist(self):
+		"""Retrieves all playlists from authenticating user, then allows user to select one"""
+		results = self.sp.current_user_playlists()
+		for i, item in enumerate(results['items']):
+			print ("{number} {name}".format(number=i, name=item['name'].encode('utf8'))) #Prints out the name of each playlist, preceded by a number
+
+		choice = input("Please choose a playlist number: ")
+		return results['items'][int(choice)]['id']
+
+	def getSongs(self, playlist_id):
+		"""Gets all songs from a chosen playlist, returns a lsit of all song ids"""
+		results = self.sp.user_playlist_tracks(self.id,playlist_id)
+		tracks = results['items']
+		song_ids = []
+		while results['next']:
+			results = self.sp.next(results)
+			tracks.extend(results['items'])
+		for song in tracks:
+			song_ids.append(song['track']['id'])
+		return song_ids
+
+	def getUserToken(self):
+		"""Gets authentication token from user"""
+		name = input("Please enter your username: ")
+		token = util.prompt_for_user_token(username=name,scope=self.SCOPE, client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET, redirect_uri=self.REDIRECT_URI)
+		return token
+
+	def sortSongs(self, songF, danceL, danceH, energyL, energyH, loudL, loudH, acousticL, acousticH, 
+		instrumentL, instrumentH, livenessL, livenessH, valenceL, valenceH):
+		"""Returns True if all conditions are met. Conditions include: Danceability, Energy, Loudness, Acousticness, Instrumentalness, Liveness, and Valence"""
+		if danceL <= songF['danceability'] <= danceH:
+			if energyL <= songF['energy'] <= energyH:
+				if loudL <= songF['loudness'] <= loudH:
+					if acousticL <= songF['acousticness'] <= acousticH:
+						if instrumentL <= songF['instrumentalness'] <= instrumentH:
+							if livenessL <= songF['liveness'] <= livenessH:
+								if valenceL <= songF['valence'] <= valenceH:
+									return True
+
+	def getRelatedArtistsIDs(self, artistID):
+		allArtists=[artistID]
+		items=self.sp.artist_related_artists(artistID)
+		artists=items['artists']
+		for i in range(len(artists)):
+			allArtists.append(artists[i]['uri'])
+		return allArtists
+		
+	def getAlbumsByArtist(self, artistID):
+		items=self.sp.artist_albums(artistID,album_type='album', country=None, limit=20, offset=0)
+		albums=items['items']
+		return albums
+
+	def getTracksByAlbum(self,albumID):
+		items=self.sp.album_tracks(albumID,limit=50,offset=0)
+		tracks=items['items']
+		return tracks
+	
+	def getRandomSongs(self,songs):
+		pass
+
+	def getLimits(self):
+		"""Asks user for the minimums and maximums for each condition, leaving a blank responistse will return the lowest or highest possible value. Then asks user to name the playlist"""
+		danceL = float(input("Danceability minimum (how suitable track is for dancing 0.0-1.0): ") or "0")
+		danceH = float(input("Danceability maximum: ") or "1")
+		energyL = float(input("Energy minimum (intensity, or speed of a track 0.0-1.0): ") or "0")
+		energyH = float(input("Energy maximum: ") or "1")
+		loudL = float(input("Loudness minimum (Overall loudness of a track in decibels -60-0): ") or "-60")
+		loudH = float(input("Loudness maximum: ") or "0")
+		acousticL = float(input("Acousticness minimum (measure of whether a track is acoustic 0.0-1): ") or "0")
+		acousticH = float(input("Acousticness maximum: ") or "1")
+		instrumentL = float(input("Instrumentalness minimum (Predicts whether track contains no vocals 0.0-1.0): ") or "0")
+		instrumentH = float(input("Instrumentalness maximum: ") or "1")
+		livenessL = float(input("Liveness minimum (Detects presence of audience 0.0-1.0): ") or "0")
+		livenessH = float(input("Liveness maximum: ") or "1")
+		valenceL = float(input("Valence minimum (Positivity measurement 0.0-1.0): ") or "0")
+		valenceH = float(input("Valence maximum: ") or "1")
+		name = input("Please name your playlist: ")
+		return [danceL, danceH, energyL, energyH, loudL, loudH, acousticL, acousticH, instrumentL, instrumentH, livenessL, livenessH, valenceL, valenceH, name]
+
+	def createPlaylist(self, title, tracks):
+		"""Creates a new playlist from all tracks that met conditions"""
+		playlist = self.sp.user_playlist_create(self.id, title, False)
+		for track in tracks:
+			self.sp.user_playlist_add_tracks(self.id, playlist['id'], [track])
+
+		print("Playlist Created")
+
+	def main(self):
+		#playlist = self.getPlaylist()
+		searchedArtist=input("Pick an artist:")
+		artistsIDs = self.sp.search(q='artist:' + searchedArtist, type='artist')
+		artist=artistsIDs['artists']['items']
+		relatedArtistsIDs=self.getRelatedArtistsIDs(artist[0]['uri'])
+		#albumsIDs=self.getAlbumsByArtist(relatedArtistsIDs[0])
+		#tracks=self.getTracksByAlbum(albumsIDs[0]['uri'])
+
+		tracksIDs=[]
+
+		for i in range(len(relatedArtistsIDs)):
+			albums=self.getAlbumsByArtist(relatedArtistsIDs[i])
+			for k in range(len(albums)):
+				tracks=self.getTracksByAlbum(albums[k]['uri'])
+				for j in range(len(tracks)):
+					tracksIDs.append(tracks[j]['uri'])
+					#print(tracks[j]['name'])
+		
+		random.shuffle(tracksIDs)
+		
+		songs=[]
+		
+		for x in range(30):
+			songs.append(tracksIDs[x])
+			
+
+		playlistName=input("Playlist Name: ")
+##		songs = self.getSongs(playlist)
+##		newPlaylist = []
+##		pref = self.getLimits()
+##		for song_id in songs:
+##			song = self.getFeatures([song_id])
+##			if self.sortSongs(song[0], pref[0], pref[1], pref[2], pref[3], pref[4], pref[5], pref[6], pref[7], pref[8], pref[9], pref[10], pref[11], pref[12], pref[13]):
+##				newPlaylist.append(song[0]['id'])
+##
+		self.createPlaylist(playlistName, songs)
+
+#ask for artist, check artists discogrophy
+#find related artists, check related discogrophy
+
+if __name__ == "__main__":
+	SpotifyUser = User()
+	SpotifyUser.main()
