@@ -27,26 +27,6 @@ class User():
 		features = self.sp.audio_features(track)
 		return features
 
-	def getPlaylist(self):
-		"""Retrieves all playlists from authenticating user, then allows user to select one"""
-		results = self.sp.current_user_playlists()
-		for i, item in enumerate(results['items']):
-			print ("{number} {name}".format(number=i, name=item['name'].encode('utf8'))) #Prints out the name of each playlist, preceded by a number
-
-		choice = input("Please choose a playlist number: ")
-		return results['items'][int(choice)]['id']
-
-	def getSongs(self, playlist_id):
-		"""Gets all songs from a chosen playlist, returns a lsit of all song ids"""
-		results = self.sp.user_playlist_tracks(self.id,playlist_id)
-		tracks = results['items']
-		song_ids = []
-		while results['next']:
-			results = self.sp.next(results)
-			tracks.extend(results['items'])
-		for song in tracks:
-			song_ids.append(song['track']['id'])
-		return song_ids
 
 	def getUserToken(self):
 		"""Gets authentication token from user"""
@@ -65,27 +45,48 @@ class User():
 							if livenessL <= songF['liveness'] <= livenessH:
 								if valenceL <= songF['valence'] <= valenceH:
 									return True
+	def getPlaylist(self):
+		"""Retrieves all playlists from authenticating user, then allows user to select one"""
+		results = self.sp.current_user_playlists()
+		for i, item in enumerate(results['items']):
+			print ("{number} {name}".format(number=i, name=item['name'].encode('utf8'))) #Prints out the name of each playlist, preceded by a number
+		print("Or type X to use all of your music")
+
+		choice = input("Please choose a playlist number: ")
+		if choice == 'x' or choice == 'X':
+			return results['items']
+		else:
+			return results['items'][int(choice)]['id']
+
+	def getTracksByPlaylist(self, playlistID):
+		"""Gets all songs from a chosen playlist, returns a lsit of all song ids"""
+		results = self.sp.user_playlist_tracks(self.id,playlistID)
+		tracks = results['items']
+		song_ids = []
+		while results['next']:
+			results = self.sp.next(results)
+			tracks.extend(results['items'])
+			
+		return tracks
 
 	def getRelatedArtistsIDs(self, artistID):
 		allArtists=[artistID]
-		items=self.sp.artist_related_artists(artistID)
-		artists=items['artists']
+		results=self.sp.artist_related_artists(artistID)
+		artists=results['artists']
 		for i in range(len(artists)):
 			allArtists.append(artists[i]['uri'])
 		return allArtists
 		
 	def getAlbumsByArtist(self, artistID):
-		items=self.sp.artist_albums(artistID,album_type='album', country=None, limit=20, offset=0)
-		albums=items['items']
+		results=self.sp.artist_albums(artistID,album_type='album', country=None, limit=20, offset=0)
+		albums=results['items']
 		return albums
 
 	def getTracksByAlbum(self,albumID):
-		items=self.sp.album_tracks(albumID,limit=50,offset=0)
-		tracks=items['items']
-		return tracks
-	
-	def getRandomSongs(self,songs):
-		pass
+		results=self.sp.album_tracks(albumID,limit=50,offset=0)
+		tracks=results['items']
+		return tracks			
+			
 
 	def getLimits(self):
 		"""Asks user for the minimums and maximums for each condition, leaving a blank responistse will return the lowest or highest possible value. Then asks user to name the playlist"""
@@ -115,35 +116,50 @@ class User():
 		print("Playlist Created")
 
 	def main(self):
-		#playlist = self.getPlaylist()
+		artistOrFeatures=input("Search by artists (1) or song features (2)")
+		musicSelection=input("Get songs from your library (1) or from all music (2): ")
 		searchedArtist=input("Pick an artist:")
 		artistsIDs = self.sp.search(q='artist:' + searchedArtist, type='artist')
 		artist=artistsIDs['artists']['items']
 		relatedArtistsIDs=self.getRelatedArtistsIDs(artist[0]['uri'])
-		#albumsIDs=self.getAlbumsByArtist(relatedArtistsIDs[0])
-		#tracks=self.getTracksByAlbum(albumsIDs[0]['uri'])
-
+		
 		tracksIDs=[]
-
-		for i in range(len(relatedArtistsIDs)):
-			albums=self.getAlbumsByArtist(relatedArtistsIDs[i])
-			for k in range(len(albums)):
-				tracks=self.getTracksByAlbum(albums[k]['uri'])
-				for j in range(len(tracks)):
-					tracksIDs.append(tracks[j]['uri'])
-					#print(tracks[j]['name'])
+		
+		if musicSelection=="1":
+			playlist = self.getPlaylist()
+			tracks=self.getTracksByPlaylist(playlist)
+			for i in range(len(tracks)):
+				if tracks[i]['track']['artists'][0]['uri'] in relatedArtistsIDs or tracks[i]['track']['artists'][0]['name']==artist[0]['name']:
+					tracksIDs.append(tracks[i]['track']['uri'])
+		else:
+			for i in range(len(relatedArtistsIDs)):
+				albums=self.getAlbumsByArtist(relatedArtistsIDs[i]) #get albums by artist
+				for k in range(len(albums)):
+					tracks=self.getTracksByAlbum(albums[k]['uri'])	#get songs by album
+					for j in range(len(tracks)):
+						if random.randint(0,3)==1 or tracks[j]['artists'][0]['name']==artist[0]['name']:
+							tracksIDs.append(tracks[j]['uri'])			#add all songs to master list
+							
+							
+## 		pref = self.getLimits()
+##		for song_id in songs:
+##			song = self.getFeatures([song_id])
+##			if self.sortSongs(song[0], pref[0], pref[1], pref[2], pref[3], pref[4], pref[5], pref[6], pref[7], pref[8], pref[9], pref[10], pref[11], pref[12], pref[13]):
+##				tracksIDs.append(song[0]['id'])
+						
+		
 		
 		random.shuffle(tracksIDs)
+		print(len(tracksIDs))
 		
-		songs=[]
+		songs=tracksIDs
 		
-		for x in range(30):
-			songs.append(tracksIDs[x])
+		#for x in range(50):
+			#songs.append(tracksIDs[x])
 			
 
 		playlistName=input("Playlist Name: ")
-##		songs = self.getSongs(playlist)
-##		newPlaylist = []
+
 ##		pref = self.getLimits()
 ##		for song_id in songs:
 ##			song = self.getFeatures([song_id])
@@ -152,9 +168,8 @@ class User():
 ##
 		self.createPlaylist(playlistName, songs)
 
-#ask for artist, check artists discogrophy
-#find related artists, check related discogrophy
 
 if __name__ == "__main__":
 	SpotifyUser = User()
 	SpotifyUser.main()
+
