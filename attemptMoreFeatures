@@ -104,8 +104,8 @@ class User():
 		livenessH = float(input("Liveness maximum: ") or "1")
 		valenceL = float(input("Valence minimum (Positivity measurement 0.0-1.0): ") or "0")
 		valenceH = float(input("Valence maximum: ") or "1")
-		name = input("Please name your playlist: ")
-		return [danceL, danceH, energyL, energyH, loudL, loudH, acousticL, acousticH, instrumentL, instrumentH, livenessL, livenessH, valenceL, valenceH, name]
+		#name = input("Please name your playlist: ")
+		return [danceL, danceH, energyL, energyH, loudL, loudH, acousticL, acousticH, instrumentL, instrumentH, livenessL, livenessH, valenceL, valenceH]
 
 	def createPlaylist(self, title, tracks):
 		"""Creates a new playlist from all tracks that met conditions"""
@@ -128,17 +128,30 @@ class User():
 			artistsIDs = self.sp.search(q='artist:' + searchedArtist, type='artist')				#gets songs based on artist
 			artist=artistsIDs['artists']['items']
 			relatedArtistsIDs=self.getRelatedArtistsIDs(artist[0]['uri'])
-		else:
-			relatedArtistsIDs=tracks
 			
-		pref = self.getLimits()
-
-
-		for i in range(len(tracks)):
-			song = self.getFeatures(tracks[i])
-			if tracks[i]['track']['artists'][0]['uri'] in relatedArtistsIDs or tracks[i]['track']['artists'][0]['name']==artist[0]['name']:
+			pref = self.getLimits()
+			
+			for i in range(len(tracks)):
+				try:
+					song = self.getFeatures(tracks[i]['track']['id'])
+				except:
+					continue
+				if tracks[i]['track']['artists'][0]['uri'] in relatedArtistsIDs or tracks[i]['track']['artists'][0]['name']==artist[0]['name']:
+					if self.sortSongs(song[0], pref[0], pref[1], pref[2], pref[3], pref[4], pref[5], pref[6], pref[7], pref[8], pref[9], pref[10], pref[11], pref[12], pref[13]):
+						tracksIDs.append(tracks[i]['track']['uri'])
+			
+		else:
+			pref = self.getLimits()
+			for i in range(len(tracks)):
+				try:
+					song = self.getFeatures(tracks[i]['track']['id'])
+				except:
+					continue
 				if self.sortSongs(song[0], pref[0], pref[1], pref[2], pref[3], pref[4], pref[5], pref[6], pref[7], pref[8], pref[9], pref[10], pref[11], pref[12], pref[13]):
 					tracksIDs.append(tracks[i]['track']['uri'])
+					
+			return tracksIDs
+			
 			
 		
 		return tracksIDs
